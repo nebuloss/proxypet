@@ -54,15 +54,17 @@ void freeProxySession(proxy_session* ps){
     free(ps);
 }
 
-int vsession_debug(ssh_session dst,ssh_session src,const char* restrict format,va_list va){
+int vsession_debug(ssh_session dst,ssh_session src,const char* format,va_list va){
     unsigned srcport,dstport;
 
     ssh_options_get_port(dst,&dstport);
     ssh_options_get_port(src,&srcport);
 
-    printf("[%d to %d] ",srcport,dstport);
-    int rc=vprintf(format,va);
-    putchar('\n');
+    size_t len=strlen(format)+32;
+    char* buffer=malloc(len);
+    snprintf(buffer,len,"[%d to %d] %s\n",srcport,dstport,format);
+    int rc=vprintf(buffer,va);
+    free(buffer);
     return rc;
 }
 
@@ -129,6 +131,11 @@ int handle_auth_password(ssh_session session, const char *user, const char *pass
     return SSH_AUTH_SUCCESS;
 }
 
+void channel_reader_thread(ssh_channel channel){
+    char buffer;
+    //block until channel send eof
+    ssh_channel_read(channel,&buffer,1,0);
+}
 
 // Channel 
 
@@ -139,7 +146,13 @@ int handle_pty_request(ssh_session session,ssh_channel channel,const char *term,
 
 int handle_shell_request(ssh_session session, ssh_channel channel, void* other){
     channel_debug(other,channel,"handle_shell_request");
-    return ssh_channel_request_shell(other);
+    int rc= ssh_channel_request_shell(other);
+    //I only found this way for now
+    pthread_t tid;
+    pthread_create(&tid,NULL,(void*)channel_reader_thread,other);
+    pthread_detach(tid);
+
+    return rc;
 }
 
 int handle_channel_data(ssh_session session, ssh_channel channel, void *data, uint32_t len, int is_stderr, void* other){
@@ -238,6 +251,7 @@ ssh_channel handle_channel_creation(ssh_session session, proxy_session *ps){
         proxy_debug(ps,"Cannot create client channel");
         return NULL;
     }
+
     if (!(ps->server_channel=ssh_channel_new(ps->server_session))){
         proxy_debug(ps,"Cannot create server channel");
         return NULL;
@@ -252,7 +266,7 @@ ssh_channel handle_channel_creation(ssh_session session, proxy_session *ps){
     ssh_set_channel_callbacks(ps->client_channel,ps->client_channel_callbacks);
     ps->server_channel_callbacks=allocChannelCallbacks(ps->client_channel);
     ssh_set_channel_callbacks(ps->server_channel,ps->server_channel_callbacks);
-
+    
     return ps->client_channel;
 }
 
