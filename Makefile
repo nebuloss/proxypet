@@ -22,7 +22,8 @@ OUT = main
 BUILD_DIR = build
 
 # List of all the .cpp source files to compile
-SRC = $(call rwildcard,,*.c)
+#SRC = $(call rwildcard,,*.c)
+SRC=main.c
 
 # List of all the .o object files to produce
 OBJ = $(patsubst %,$(BUILD_DIR)/%,$(SRC:%.c=%.o))
@@ -51,4 +52,6 @@ clean:
 
 run: 
 	@echo "Running $(OUT)..."
-	@./$(OUT)
+	@./$(OUT) 2222 2223 & \
+	./$(OUT) 2223 22 & \
+	wait
