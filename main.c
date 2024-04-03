@@ -132,9 +132,7 @@ int handle_auth_password(ssh_session session, const char *user, const char *pass
 }
 
 void channel_reader_thread(ssh_channel channel){
-    char buffer;
-    //block until channel send eof
-    ssh_channel_read(channel,&buffer,1,0);
+    ssh_channel_poll_timeout(channel,-1,0);
 }
 
 // Channel 
@@ -147,11 +145,10 @@ int handle_pty_request(ssh_session session,ssh_channel channel,const char *term,
 int handle_shell_request(ssh_session session, ssh_channel channel, void* other){
     channel_debug(other,channel,"handle_shell_request");
     int rc= ssh_channel_request_shell(other);
-    //I only found this way for now
+    
     pthread_t tid;
     pthread_create(&tid,NULL,(void*)channel_reader_thread,other);
     pthread_detach(tid);
-
     return rc;
 }
 
@@ -266,6 +263,11 @@ ssh_channel handle_channel_creation(ssh_session session, proxy_session *ps){
     ssh_set_channel_callbacks(ps->client_channel,ps->client_channel_callbacks);
     ps->server_channel_callbacks=allocChannelCallbacks(ps->client_channel);
     ssh_set_channel_callbacks(ps->server_channel,ps->server_channel_callbacks);
+
+    pthread_t tid;
+    pthread_create(&tid,NULL,(void*)channel_reader_thread,ps->client_channel);
+    pthread_detach(tid);
+
     
     return ps->client_channel;
 }
